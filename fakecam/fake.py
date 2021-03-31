@@ -22,6 +22,7 @@ import threading
 
 from akvcam import AkvCameraWriter
 
+
 def findFile(pattern, path):
     for root, _, files in os.walk(path):
         for name in files:
@@ -29,13 +30,16 @@ def findFile(pattern, path):
                 return os.path.join(root, name)
     return None
 
+
 def get_codec_args_from_string(codec):
     return (char for char in codec)
 
 
 def _log_camera_property_not_set(prop, value):
-    print("Cannot set camera property {} to {}. "
-          "Defaulting to auto-detected property set by opencv".format(prop, value))
+    print(
+        "Cannot set camera property {} to {}. "
+        "Defaulting to auto-detected property set by opencv".format(prop, value)
+    )
 
 
 class RealCam:
@@ -58,7 +62,7 @@ class RealCam:
                 self.get_frame_width(),
                 self.get_frame_height(),
                 self.get_frame_rate(),
-                self.get_codec()
+                self.get_codec(),
             )
         )
 
@@ -110,7 +114,7 @@ class RealCam:
     def read(self):
         with self.lock:
             if self.frame is None:
-               return None
+                return None
             return self.frame.copy()
 
     def stop(self):
@@ -139,7 +143,7 @@ class FakeCam:
         foreground_mask_image: str,
         webcam_path: str,
         v4l2loopback_path: str,
-        use_akvcam: bool
+        use_akvcam: bool,
     ) -> None:
         self.no_background = no_background
         self.use_foreground = use_foreground
@@ -157,13 +161,15 @@ class FakeCam:
         self.height = self.real_cam.get_frame_height()
         self.use_akvcam = use_akvcam
         if not use_akvcam:
-            self.fake_cam = pyfakewebcam.FakeWebcam(v4l2loopback_path, self.width, self.height)
+            self.fake_cam = pyfakewebcam.FakeWebcam(
+                v4l2loopback_path, self.width, self.height
+            )
         else:
             self.fake_cam = AkvCameraWriter(v4l2loopback_path, self.width, self.height)
         self.foreground_mask = None
         self.inverted_foreground_mask = None
         self.session = requests.Session()
-        if bodypix_url.startswith('/'):
+        if bodypix_url.startswith("/"):
             print("Looks like you want to use a unix socket")
             # self.session = requests_unixsocket.Session()
             self.bodypix_url = "http+unix:/" + bodypix_url
@@ -177,19 +183,22 @@ class FakeCam:
         self.image_lock = asyncio.Lock()
 
     async def _get_mask(self, frame, session):
-        frame = cv2.resize(frame, (0, 0), fx=self.scale_factor,
-                           fy=self.scale_factor)
+        frame = cv2.resize(frame, (0, 0), fx=self.scale_factor, fy=self.scale_factor)
         _, data = cv2.imencode(".png", frame)
-        #print("Posting to " + self.bodypix_url)
+        # print("Posting to " + self.bodypix_url)
         async with session.post(
-            url=self.bodypix_url, data=data.tobytes(),
-            headers={"Content-Type": "application/octet-stream"}
+            url=self.bodypix_url,
+            data=data.tobytes(),
+            headers={"Content-Type": "application/octet-stream"},
         ) as r:
             mask = np.frombuffer(await r.read(), dtype=np.uint8)
             mask = mask.reshape((frame.shape[0], frame.shape[1]))
             mask = cv2.resize(
-                mask, (0, 0), fx=1 / self.scale_factor,
-                fy=1 / self.scale_factor, interpolation=cv2.INTER_NEAREST
+                mask,
+                (0, 0),
+                fx=1 / self.scale_factor,
+                fy=1 / self.scale_factor,
+                interpolation=cv2.INTER_NEAREST,
             )
             mask = cv2.dilate(mask, np.ones((10, 10), np.uint8), iterations=1)
             mask = cv2.blur(mask.astype(float), (30, 30))
@@ -210,16 +219,27 @@ class FakeCam:
 
     """Rescale image to dimensions self.width, self.height. If keep_aspect is True
 then scale & crop the image so that its pixels retain their aspect ratio."""
+
     def resize_image(self, img, keep_aspect):
-        if self.width==0 or self.height==0:
-            raise RuntimeError("Camera dimensions error w={} h={}".format(self.width, self.height))
+        if self.width == 0 or self.height == 0:
+            raise RuntimeError(
+                "Camera dimensions error w={} h={}".format(self.width, self.height)
+            )
         if keep_aspect:
-            imgheight, imgwidth,=img.shape[:2]
-            scale=max(self.width/imgwidth, self.height/imgheight)
-            newimgwidth, newimgheight=int(np.floor(self.width/scale)), int(np.floor(self.height/scale))
-            ix0=int(np.floor(0.5*imgwidth-0.5*newimgwidth))
-            iy0=int(np.floor(0.5*imgheight-0.5*newimgheight))
-            img = cv2.resize(img[iy0:iy0+newimgheight, ix0:ix0+newimgwidth, :], (self.width, self.height))
+            (
+                imgheight,
+                imgwidth,
+            ) = img.shape[:2]
+            scale = max(self.width / imgwidth, self.height / imgheight)
+            newimgwidth, newimgheight = int(np.floor(self.width / scale)), int(
+                np.floor(self.height / scale)
+            )
+            ix0 = int(np.floor(0.5 * imgwidth - 0.5 * newimgwidth))
+            iy0 = int(np.floor(0.5 * imgheight - 0.5 * newimgheight))
+            img = cv2.resize(
+                img[iy0 : iy0 + newimgheight, ix0 : ix0 + newimgwidth, :],
+                (self.width, self.height),
+            )
         else:
             img = cv2.resize(img, (self.width, self.height))
         return img
@@ -231,7 +251,9 @@ then scale & crop the image so that its pixels retain their aspect ratio."""
             background = cv2.imread(self.background_image)
             if background is not None:
                 if not self.tiling:
-                    background = self.resize_image(background, self.background_keep_aspect)
+                    background = self.resize_image(
+                        background, self.background_keep_aspect
+                    )
                 else:
                     sizey, sizex = background.shape[0], background.shape[1]
                     if sizex > self.width and sizey > self.height:
@@ -239,52 +261,69 @@ then scale & crop the image so that its pixels retain their aspect ratio."""
                     else:
                         repx = (self.width - 1) // sizex + 1
                         repy = (self.height - 1) // sizey + 1
-                        background = np.tile(background,(repy, repx, 1))
-                        background = background[0:self.height, 0:self.width]
+                        background = np.tile(background, (repy, repx, 1))
+                        background = background[0 : self.height, 0 : self.width]
                 background = itertools.repeat(background)
             else:
                 background_video = cv2.VideoCapture(self.background_image)
                 if not background_video.isOpened():
-                    raise RuntimeError("Couldn't open video '{}'".format(self.background_image))
+                    raise RuntimeError(
+                        "Couldn't open video '{}'".format(self.background_image)
+                    )
                 self.bg_video_fps = background_video.get(cv2.CAP_PROP_FPS)
                 # Initiate current fps to background video fps
                 self.current_fps = self.bg_video_fps
+
                 def read_frame():
+                    ret, frame = background_video.read()
+                    if not ret:
+                        background_video.set(cv2.CAP_PROP_POS_FRAMES, 0)
                         ret, frame = background_video.read()
-                        if not ret:
-                            background_video.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                            ret, frame = background_video.read()
-                            assert ret, 'cannot read frame %r' % self.background_image
-                        return self.resize_image(frame, self.background_keep_aspect)
+                        assert ret, "cannot read frame %r" % self.background_image
+                    return self.resize_image(frame, self.background_keep_aspect)
+
                 def next_frame():
                     while True:
-                        advrate=self.bg_video_fps/self.current_fps # Number of frames we need to advance background movie. Fractional.
-                        if advrate<1:
+                        advrate = (
+                            self.bg_video_fps / self.current_fps
+                        )  # Number of frames we need to advance background movie. Fractional.
+                        if advrate < 1:
                             # Number of frames<1 so to avoid movie freezing randomly choose whether to advance by one frame with correct probability.
-                            self.bg_video_adv_rate=1 if np.random.uniform()<advrate else 0
+                            self.bg_video_adv_rate = (
+                                1 if np.random.uniform() < advrate else 0
+                            )
                         else:
                             # Just round to nearest number of frames when >=1.
                             self.bg_video_adv_rate = round(advrate)
                         for i in range(self.bg_video_adv_rate):
-                            frame = read_frame();
+                            frame = read_frame()
                         yield frame
+
                 background = next_frame()
 
             self.images["background"] = background
 
             if self.use_foreground and self.foreground_image is not None:
                 foreground = cv2.imread(self.foreground_image)
-                self.images["foreground"] = cv2.resize(foreground,
-                                                       (self.width, self.height))
+                self.images["foreground"] = cv2.resize(
+                    foreground, (self.width, self.height)
+                )
                 foreground_mask = cv2.imread(self.foreground_mask_image)
                 foreground_mask = cv2.normalize(
-                    foreground_mask, None, alpha=0, beta=1,
-                    norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
-                foreground_mask = cv2.resize(foreground_mask,
-                                             (self.width, self.height))
+                    foreground_mask,
+                    None,
+                    alpha=0,
+                    beta=1,
+                    norm_type=cv2.NORM_MINMAX,
+                    dtype=cv2.CV_32F,
+                )
+                foreground_mask = cv2.resize(foreground_mask, (self.width, self.height))
                 self.images["foreground_mask"] = cv2.cvtColor(
-                    foreground_mask, cv2.COLOR_BGR2GRAY)
-                self.images["inverted_foreground_mask"] = 1 - self.images["foreground_mask"]
+                    foreground_mask, cv2.COLOR_BGR2GRAY
+                )
+                self.images["inverted_foreground_mask"] = (
+                    1 - self.images["foreground_mask"]
+                )
 
     def hologram_effect(self, img):
         # add a blue tint
@@ -292,15 +331,18 @@ then scale & crop the image so that its pixels retain their aspect ratio."""
         # add a halftone effect
         bandLength, bandGap = 3, 4
         for y in range(holo.shape[0]):
-            if y % (bandLength+bandGap) < bandLength:
-                holo[y,:,:] = holo[y,:,:] * np.random.uniform(0.1, 0.3)
+            if y % (bandLength + bandGap) < bandLength:
+                holo[y, :, :] = holo[y, :, :] * np.random.uniform(0.1, 0.3)
         # add some ghosting
-        holo_blur = cv2.addWeighted(holo, 0.2, self.shift_image(holo.copy(), 5, 5), 0.8, 0)
-        holo_blur = cv2.addWeighted(holo_blur, 0.4, self.shift_image(holo.copy(), -5, -5), 0.6, 0)
+        holo_blur = cv2.addWeighted(
+            holo, 0.2, self.shift_image(holo.copy(), 5, 5), 0.8, 0
+        )
+        holo_blur = cv2.addWeighted(
+            holo_blur, 0.4, self.shift_image(holo.copy(), -5, -5), 0.6, 0
+        )
         # combine with the original color, oversaturated
         out = cv2.addWeighted(img, 0.5, holo_blur, 0.6, 0)
         return out
-
 
     async def mask_frame(self, session, frame):
         # fetch the mask with retries (the app needs to warmup and we're lazy)
@@ -317,21 +359,26 @@ then scale & crop the image so that its pixels retain their aspect ratio."""
         if self.hologram:
             foreground_frame = self.hologram_effect(foreground_frame)
 
-        background_frame = cv2.blur(frame, (self.background_blur, self.background_blur), cv2.BORDER_DEFAULT)
+        background_frame = cv2.blur(
+            frame, (self.background_blur, self.background_blur), cv2.BORDER_DEFAULT
+        )
 
         # composite the foreground and background
         async with self.image_lock:
             if self.no_background is False:
                 background_frame = next(self.images["background"])
             for c in range(frame.shape[2]):
-                frame[:, :, c] = foreground_frame[:, :, c] * mask + background_frame[:, :, c] * (1 - mask)
+                frame[:, :, c] = foreground_frame[:, :, c] * mask + background_frame[
+                    :, :, c
+                ] * (1 - mask)
 
             if self.use_foreground and self.foreground_image is not None:
                 for c in range(frame.shape[2]):
                     frame[:, :, c] = (
                         frame[:, :, c] * self.images["inverted_foreground_mask"]
-                        + self.images["foreground"][:, :, c] * self.images["foreground_mask"]
-                        )
+                        + self.images["foreground"][:, :, c]
+                        * self.images["foreground_mask"]
+                    )
 
         return frame
 
@@ -369,51 +416,93 @@ then scale & crop the image so that its pixels retain their aspect ratio."""
                     frame_count = 0
                     t0 = time.monotonic()
 
+
 def parse_args():
-    parser = ArgumentParser(description="Faking your webcam background under \
+    parser = ArgumentParser(
+        description="Faking your webcam background under \
                             GNU/Linux. Please make sure your bodypix network \
                             is running. For more information, please refer to: \
-                            https://github.com/fangfufu/Linux-Fake-Background-Webcam")
-    parser.add_argument("-W", "--width", default=1280, type=int,
-                        help="Set real webcam width")
-    parser.add_argument("-H", "--height", default=720, type=int,
-                        help="Set real webcam height")
-    parser.add_argument("-F", "--fps", default=30, type=int,
-                        help="Set real webcam FPS")
-    parser.add_argument("-C", "--codec", default='MJPG', type=str,
-                        help="Set real webcam codec")
-    parser.add_argument("-S", "--scale-factor", default=0.5, type=float,
-                        help="Scale factor of the image sent to BodyPix network")
-    parser.add_argument("-B", "--bodypix-url", default="http://127.0.0.1:9000",
-                        help="Tensorflow BodyPix URL")
-    parser.add_argument("-w", "--webcam-path", default="/dev/video0",
-                        help="Set real webcam path")
-    parser.add_argument("-v", "--v4l2loopback-path", default="/dev/video2",
-                        help="V4l2loopback device path")
-    parser.add_argument("--akvcam", action="store_true",
-                        help="Use an akvcam device rather than a v4l2loopback device")
-    parser.add_argument("-i", "--image-folder", default=".",
-                        help="Folder which contains foreground and background images")
-    parser.add_argument("-b", "--background-image", default="background.*",
-                        help="Background image path, animated background is \
-                        supported.")
-    parser.add_argument("--tile-background", action="store_true",
-                        help="Tile the background image")
-    parser.add_argument("--no-background", action="store_true",
-                        help="Disable background image, blurry background")
-    parser.add_argument("--background-blur", default="25", type=int,
-                        help="Set background blur level")
-    parser.add_argument("--background-keep-aspect", action="store_true",
-                        help="Crop background if needed to maintain aspect ratio")
-    parser.add_argument("--no-foreground", action="store_true",
-                        help="Disable foreground image")
-    parser.add_argument("-f", "--foreground-image", default="foreground.*",
-                        help="Foreground image path")
-    parser.add_argument("-m", "--foreground-mask-image",
-                        default="foreground-mask.*",
-                        help="Foreground mask image path")
-    parser.add_argument("--hologram", action="store_true",
-                        help="Add a hologram effect")
+                            https://github.com/fangfufu/Linux-Fake-Background-Webcam"
+    )
+    parser.add_argument(
+        "-W", "--width", default=1280, type=int, help="Set real webcam width"
+    )
+    parser.add_argument(
+        "-H", "--height", default=720, type=int, help="Set real webcam height"
+    )
+    parser.add_argument("-F", "--fps", default=30, type=int, help="Set real webcam FPS")
+    parser.add_argument(
+        "-C", "--codec", default="MJPG", type=str, help="Set real webcam codec"
+    )
+    parser.add_argument(
+        "-S",
+        "--scale-factor",
+        default=0.5,
+        type=float,
+        help="Scale factor of the image sent to BodyPix network",
+    )
+    parser.add_argument(
+        "-B",
+        "--bodypix-url",
+        default="http://127.0.0.1:9000",
+        help="Tensorflow BodyPix URL",
+    )
+    parser.add_argument(
+        "-w", "--webcam-path", default="/dev/video0", help="Set real webcam path"
+    )
+    parser.add_argument(
+        "-v",
+        "--v4l2loopback-path",
+        default="/dev/video2",
+        help="V4l2loopback device path",
+    )
+    parser.add_argument(
+        "--akvcam",
+        action="store_true",
+        help="Use an akvcam device rather than a v4l2loopback device",
+    )
+    parser.add_argument(
+        "-i",
+        "--image-folder",
+        default=".",
+        help="Folder which contains foreground and background images",
+    )
+    parser.add_argument(
+        "-b",
+        "--background-image",
+        default="background.*",
+        help="Background image path, animated background is \
+                        supported.",
+    )
+    parser.add_argument(
+        "--tile-background", action="store_true", help="Tile the background image"
+    )
+    parser.add_argument(
+        "--no-background",
+        action="store_true",
+        help="Disable background image, blurry background",
+    )
+    parser.add_argument(
+        "--background-blur", default="25", type=int, help="Set background blur level"
+    )
+    parser.add_argument(
+        "--background-keep-aspect",
+        action="store_true",
+        help="Crop background if needed to maintain aspect ratio",
+    )
+    parser.add_argument(
+        "--no-foreground", action="store_true", help="Disable foreground image"
+    )
+    parser.add_argument(
+        "-f", "--foreground-image", default="foreground.*", help="Foreground image path"
+    )
+    parser.add_argument(
+        "-m",
+        "--foreground-mask-image",
+        default="foreground-mask.*",
+        help="Foreground mask image path",
+    )
+    parser.add_argument("--hologram", action="store_true", help="Add a hologram effect")
     return parser.parse_args()
 
 
@@ -427,10 +516,12 @@ def sigquit_handler(loop, cam, signal, frame):
     cam.stop()
     sys.exit(0)
 
+
 def getNextOddNumber(number):
     if number % 2 == 0:
         return number + 1
     return number
+
 
 def main():
     args = parse_args()
@@ -453,7 +544,8 @@ def main():
         foreground_mask_image=findFile(args.foreground_mask_image, args.image_folder),
         webcam_path=args.webcam_path,
         v4l2loopback_path=args.v4l2loopback_path,
-        use_akvcam=args.akvcam)
+        use_akvcam=args.akvcam,
+    )
     loop = asyncio.get_event_loop()
     signal.signal(signal.SIGINT, partial(sigint_handler, loop, cam))
     signal.signal(signal.SIGQUIT, partial(sigquit_handler, loop, cam))

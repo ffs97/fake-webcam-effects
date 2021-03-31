@@ -6,6 +6,7 @@ from queue import Queue
 import cv2
 import numpy as np
 
+
 class AkvCameraWriter:
     def __init__(self, webcam, width, height):
         self.webcam = webcam
